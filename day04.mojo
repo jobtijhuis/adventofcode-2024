@@ -41,6 +41,22 @@ fn shift_diag[type: DType](data: Tensor[type]) -> Tensor[type]:
 
     return data_shift
 
+fn reverse[type: DType](data: Tensor[type]) -> Tensor[type]:
+    width = data.shape()[1]
+    var res = Tensor[type](data.shape())
+    for i in range(width):
+        res[width - i - 1] = data[i]
+    return res
+
+
+fn print_tensor[type: DType](data: Tensor[type]):
+    width = data.shape()[0]
+    for j in range(data.shape()[1]):
+        print("[", end="")
+        for i in range(data.shape()[0]):
+            print(chr(int(data[i + j*width])), end=",")
+        print("]",)
+
 
 
 fn main() raises:
@@ -78,6 +94,8 @@ fn main() raises:
     data_shift = shift_diag(data)
     data_trans_shift = shift_diag(data_trans)
 
+    print_tensor(data_trans_shift)
+
     print(data)
     print(data_trans)
     print("shift:")
@@ -97,25 +115,27 @@ fn main() raises:
 
     xmas_string = "XMAS"
     xmas = Tensor[type](TensorShape(1,len(xmas_string)), xmas_string.as_bytes())
-    xmas_rev_string = "SAMX"
-    xmas_rev = Tensor[type](TensorShape(1,len(xmas_rev_string)), xmas_rev_string.as_bytes())
+    # xmas_rev_string = "SAMX"
+    # xmas_rev = Tensor[type](TensorShape(1,len(xmas_rev_string)), xmas_rev_string.as_bytes())
+    xmas_rev = reverse(xmas)
 
     print(xmas)
     print(xmas_rev)
 
     fn num_match(x: Tensor[type], pattern: Tensor[type]) raises -> Int:
         pattern_simd = pattern.load[width=4](0)
-        # var result = Tensor[DType.bool](x.shape())
 
+        width = x.shape()[0]
         var num_matches = 0
 
         @parameter
         fn check_equal(idx: Int) -> None:
             value = x.load[width=4](idx)
-            equal_simd = value == pattern_simd
-            # result.store[width=1](idx, equal_simd.reduce_and())
-            if equal_simd.reduce_and():
-                num_matches += 1
+            if width - (idx % width) >= 4:
+                equal_simd = value == pattern_simd
+                # result.store[width=1](idx, equal_simd.reduce_and())
+                if equal_simd.reduce_and():
+                    num_matches += 1
 
         map[check_equal](x.num_elements())
 
@@ -123,34 +143,38 @@ fn main() raises:
 
     print(num_match(test_data, xmas))
 
-    fn find_word(data: Tensor[type]) -> Int:
-        return 0
+    fn find_word_count(data: Tensor[type], pattern: Tensor[type]) raises -> Int:
+        pattern_rev = reverse(pattern)
 
-    horizontal = num_match(data, xmas)
-    horizontal_rev = num_match(data, xmas_rev)
+        
 
-    print(String("horizontal: {}").format(horizontal))
-    print(String("horizontal_rev: {}").format(horizontal_rev))
+        horizontal = num_match(data, pattern)
+        horizontal_rev = num_match(data, pattern_rev)
 
-    vertical = num_match(data_trans, xmas)
-    vertical_rev = num_match(data_trans, xmas_rev)
+        print(String("horizontal: {}").format(horizontal))
+        print(String("horizontal_rev: {}").format(horizontal_rev))
 
-    print(String("vertical: {}").format(vertical))
-    print(String("vertical_rev: {}").format(vertical_rev))
+        vertical = num_match(data_trans, pattern)
+        vertical_rev = num_match(data_trans, pattern_rev)
 
-    diagonal_right = num_match(data_shift, xmas)
-    diagonal_right_rev = num_match(data_shift, xmas_rev)
+        print(String("vertical: {}").format(vertical))
+        print(String("vertical_rev: {}").format(vertical_rev))
 
-    print(String("diagonal_right: {}").format(diagonal_right))
-    print(String("diagonal_right_rev: {}").format(diagonal_right_rev))
+        diagonal_right = num_match(data_shift, pattern)
+        diagonal_right_rev = num_match(data_shift, pattern_rev)
 
-    diagonal_left = num_match(data_shift, xmas)
-    diagonal_left_rev = num_match(data_shift, xmas_rev)
+        print(String("diagonal_right: {}").format(diagonal_right))
+        print(String("diagonal_right_rev: {}").format(diagonal_right_rev))
 
-    print(String("diagonal_left: {}").format(diagonal_left))
-    print(String("diagonal_left_rev: {}").format(diagonal_left_rev))
+        diagonal_left = num_match(data_trans_shift, pattern)
+        diagonal_left_rev = num_match(data_trans_shift, pattern_rev)
 
-    total = horizontal + horizontal_rev + vertical + vertical_rev + diagonal_right + diagonal_right_rev + diagonal_left + diagonal_left_rev
+        print(String("diagonal_left: {}").format(diagonal_left))
+        print(String("diagonal_left_rev: {}").format(diagonal_left_rev))
+
+        return horizontal + horizontal_rev + vertical + vertical_rev + diagonal_right + diagonal_right_rev + diagonal_left + diagonal_left_rev
+
+    total = find_word_count(data, xmas)
 
     print(String("total: {}").format(total))
 
